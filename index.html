@@ -412,15 +412,67 @@
   .device-modal-title { color: #fff; font-size: 13px; text-align: center; line-height: 1.6; }
   .device-modal-actions { display: flex; gap: 12px; }
 
-  .dir-arrow {
-    position: fixed; z-index: 20; pointer-events: none;
-    width: 36px; height: 36px; border-radius: 8px; background: #d6d6d6; color: #1a1a1a;
-    font-size: 14px; display: flex; align-items: center; justify-content: center;
+  /* ---------- Layout helpers (desktop safety) ---------- */
+  :root { --view-scale: 1; --nav-h: 60px; }
+  html { overscroll-behavior: none; }
+  .row { flex-wrap: wrap; justify-content: flex-end; }
+  .tab .short { display: none; }
+
+  /* ---------- Mobile layout: bottom button bar, compact stats strip, zoomed play area ---------- */
+  body.mobile {
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none; user-select: none; overscroll-behavior: none;
   }
-  .dir-up    { top: calc(90px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); }
-  .dir-down  { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); }
-  .dir-left  { left: 16px; top: 50%; transform: translateY(-50%); }
-  .dir-right { right: 16px; top: 50%; transform: translateY(-50%); }
+  body.mobile .gen { -webkit-touch-callout: none; }
+  /* Play area is drawn at --view-scale so more generators fit on a small screen */
+  body.mobile .field {
+    inset: auto; top: 0; left: 0;
+    width: calc(100% / var(--view-scale)); height: calc(100% / var(--view-scale));
+    transform: scale(var(--view-scale)); transform-origin: 0 0;
+  }
+  /* Stats: one slim strip across the top */
+  body.mobile .hud {
+    top: 0; left: 0; right: 0; box-sizing: border-box;
+    padding: calc(6px + env(safe-area-inset-top, 0px)) 10px 6px;
+    flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: 2px 10px;
+    background: rgba(214,214,214,.92); border-radius: 0 0 12px 12px;
+  }
+  body.mobile .xp { margin-top: 0; gap: 6px; }
+  body.mobile .lvl { min-width: 26px; height: 26px; font-size: 11px; }
+  body.mobile .xp-bar { width: 84px; height: 10px; }
+  body.mobile .money { margin-top: 0; font-size: 11px; }
+  body.mobile .persec { margin-top: 0; font-size: 8px; }
+  body.mobile .multi { margin-top: 0; font-size: 9px; color: #6b5d00; }
+  /* Buttons: fixed bottom bar, always fully visible, thumb-sized */
+  body.mobile .row {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; box-sizing: border-box;
+    display: grid; grid-template-columns: 46px repeat(4, minmax(0, 1fr)); gap: 6px;
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+    background: rgba(190,190,190,.97); border-radius: 14px 14px 0 0;
+  }
+  body.mobile .tab {
+    justify-content: center; min-height: 44px; padding: 0 2px; gap: 4px;
+    font-size: 8px; white-space: nowrap; border-radius: 10px;
+  }
+  body.mobile #hammerBtn { font-size: 18px; }
+  body.mobile .tab svg { display: none; }
+  body.mobile .tab .full { display: none; }
+  body.mobile .tab .short { display: inline; }
+  /* Popups: open just above the button bar, nearly full width */
+  body.mobile .popup {
+    position: fixed; left: 8px; right: 8px; width: auto; margin: 0; z-index: 12;
+    bottom: calc(var(--nav-h) + 8px + env(safe-area-inset-bottom, 0px));
+    max-height: calc(100vh - var(--nav-h) - 110px - env(safe-area-inset-bottom, 0px));
+    max-height: calc(100dvh - var(--nav-h) - 110px - env(safe-area-inset-bottom, 0px));
+    overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  }
+  body.mobile .buy { min-height: 40px; }
+  /* Floating bits sit above the button bar */
+  body.mobile .hint { bottom: calc(var(--nav-h) + 8px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 16px); }
+  body.mobile .boost-bar { right: 8px; bottom: calc(var(--nav-h) + 8px + env(safe-area-inset-bottom, 0px)); }
+  body.mobile .fever-toast { bottom: calc(var(--nav-h) + 64px + env(safe-area-inset-bottom, 0px)); }
+  @media (max-width: 360px) { body.mobile .tab { font-size: 7px; } }
 </style>
 </head>
 <body>
@@ -435,12 +487,11 @@
   <div class="fever-overlay" id="feverOverlay" aria-hidden="true"></div>
   <div class="fever-toast" id="feverToast">Personal fever mode is active!</div>
 
-  <div class="hud">
-    <div class="row">
+  <div class="hud" id="hud">
+    <div class="row" id="navRow">
       <button class="tab" id="hammerBtn" type="button" aria-pressed="false" aria-label="Hammer: pick up generators">&#128296;</button>
-      <button class="tab" id="invBtn" type="button" aria-expanded="false" aria-controls="invPopup">Inventory</button>
+      <button class="tab" id="invBtn" type="button" aria-expanded="false" aria-controls="invPopup"><span class="full">Inventory</span><span class="short">Items</span></button>
       <button class="tab" id="upgBtn" type="button" aria-expanded="false" aria-controls="upgPopup">Upgrades</button>
-      <button class="tab" id="cashBtn" type="button" aria-expanded="false" aria-controls="cashPanelPopup">Cash</button>
       <button class="tab" id="shopBtn" type="button" aria-expanded="false" aria-controls="shopPopup">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/>
@@ -448,7 +499,6 @@
         </svg>
         Shop
       </button>
-      <button class="tab" id="resetBtn" type="button">Reset</button>
       <button class="tab" id="rebirthBtn" type="button" aria-expanded="false" aria-controls="rebirthPopup">Rebirth</button>
     </div>
     <div class="xp" id="xp">
@@ -468,7 +518,6 @@
     <div class="popup" id="invPopup" role="dialog" aria-label="Inventory"></div>
     <div class="popup" id="upgPopup" role="dialog" aria-label="Upgrades"></div>
     <div class="popup" id="rebirthPopup" role="dialog" aria-label="Rebirth"></div>
-    <div class="popup" id="cashPanelPopup" role="dialog" aria-label="Give test currency"></div>
   </div>
 
   <div class="boost-bar" id="boostBar"></div>
@@ -488,10 +537,6 @@
     </div>
   </div>
 
-  <span class="dir-arrow dir-up" aria-hidden="true">&#9650;</span>
-  <span class="dir-arrow dir-down" aria-hidden="true">&#9660;</span>
-  <span class="dir-arrow dir-left" aria-hidden="true">&#9664;</span>
-  <span class="dir-arrow dir-right" aria-hidden="true">&#9654;</span>
 
   <script>
     var TYPES = [
@@ -573,7 +618,7 @@
     function genPrice(t) {
       return Math.max(1, Math.round(t.price * Math.pow(0.99, discountLevel)));
     }
-    var multi = 0; // +1 each time a multi roll lands; income = rate * (1 + multi)
+    var multi = 0; // +1 each time a multi roll lands (= +0.01x); income = rate * (1 + multi * 0.01)
     var owned = {}; // id -> count in inventory
     TYPES.forEach(function (t) { owned[t.id] = 0; });
     owned['alpha'] = 10; // given out for free, not sold in the shop
@@ -587,14 +632,28 @@
     var field = $('field'), hint = $('hint');
 
     var deviceType = null; // 'pc' or 'mobile'
+    var MOBILE_SCALE = 0.8; // how far the play area is zoomed out on mobile (1 = normal size)
+    var viewScale = 1;
+    function applyLayout(mobile) {
+      document.body.classList.toggle('mobile', mobile);
+      viewScale = mobile ? MOBILE_SCALE : 1;
+      document.documentElement.style.setProperty('--view-scale', viewScale);
+    }
+    // Guess from the screen first; the device picker below overrides it
+    applyLayout((window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || window.innerWidth <= 700);
     $('devicePc').addEventListener('click', function () {
       deviceType = 'pc';
+      applyLayout(false);
       $('deviceModal').hidden = true;
     });
     $('deviceMobile').addEventListener('click', function () {
       deviceType = 'mobile';
+      applyLayout(true);
       $('deviceModal').hidden = true;
     });
+    // Long-pressing a generator (the Pulse needs a 3s hold) shouldn't open a context menu
+    document.addEventListener('contextmenu', function (e) { if (e.target.closest && e.target.closest('.gen')) e.preventDefault(); });
+    function isMobile() { return document.body.classList.contains('mobile'); }
 
     // Format big numbers: 1e21 -> "1sx"
     var SUFFIXES = [[1e21,'sx'],[1e18,'qi'],[1e15,'qa'],[1e12,'t'],[1e9,'b'],[1e6,'m']];
@@ -737,17 +796,17 @@
     function pending(o) { return Math.max(0, Math.floor((Date.now() - o.t0) / curInterval(o))); }
 
     function updateMulti() {
-      $('multi').textContent = 'Multi x' + (1 + multi).toFixed(2);
+      $('multi').textContent = 'Multi x' + (1 + multi * 0.01).toFixed(2);
       gens.forEach(function (o) {
         var t = typeById(o.typeId);
-        setNoteVal(o.val, t.currency === 'tix' ? fmtNote(o.rate) + ' Tx' : '$' + fmtNote(o.rate * (1 + multi)));
+        setNoteVal(o.val, t.currency === 'tix' ? fmtNote(o.rate) + ' Tx' : '$' + fmtNote(o.rate * (1 + multi * 0.01)));
       });
     }
 
     // Chance to gain a multi level. Basic starts at 1/100 (M = 1) and D grows toward
     //   FORMULA(M) = 485.26 * M^1.5067 + 2003.09   (chance = 1 / D)
-    // M = 1 + multi * 0.01, so the chance shifts a little on every single trigger while each
-    // trigger still adds a full +1 to the income multiplier. The start-up offset fades out
+    // M = 1 + multi * 0.01 is also the income multiplier: each trigger adds +0.01x and the
+    // chance shifts a little on every single trigger. The start-up offset fades out
     // as M rises (DECAY = how slowly it fades - raise it to blend in slower).
     function baseMultiChance() {
       var M = 1 + multi * 0.01;
@@ -772,8 +831,8 @@
     function floatText(text, x, y) {
       var el = document.createElement('div');
       el.className = 'chance-text win';
-      el.style.left = x + 'px';
-      el.style.top = y + 'px';
+      el.style.left = (x * viewScale) + 'px';
+      el.style.top = (y * viewScale) + 'px';
       el.textContent = text;
       document.body.appendChild(el);
       setTimeout(function () { el.remove(); }, 900);
@@ -831,7 +890,7 @@
       o.t0 += n * interval; // keep the leftover fraction of a second
       var t = typeById(o.typeId);
       if (t.currency === 'tix') tix += n * o.rate;
-      else money += n * o.rate * (1 + multi) * (1 + rebirthCount * 0.03);
+      else money += n * o.rate * (1 + multi * 0.01) * (1 + rebirthCount * 0.03);
       addXp(o.xp * n);
       addFeverProgress(n);
       if (roll !== false && !t.noMulti) {
@@ -843,9 +902,9 @@
     function pulseWave(x, y, scale) {
       var el = document.createElement('div');
       el.className = 'pulse-wave';
-      el.style.left = x + 'px';
-      el.style.top = y + 'px';
-      el.style.setProperty('--wave-scale', scale);
+      el.style.left = (x * viewScale) + 'px';
+      el.style.top = (y * viewScale) + 'px';
+      el.style.setProperty('--wave-scale', scale * viewScale);
       document.body.appendChild(el);
       setTimeout(function () { el.remove(); }, 700);
     }
@@ -897,7 +956,7 @@
         // only gens being auto-collected by a magnet count as income per sec
         if (blocks.some(function (b) { return typeById(b.typeId).autoCollect && inRange(o, b); })) perSec += o.rate;
       });
-      perSecEl.textContent = '$' + fmt(perSec * (1 + multi)) + ' per sec';
+      perSecEl.textContent = '$' + fmt(perSec * (1 + multi * 0.01)) + ' per sec';
       placedEl.textContent = 'Placed ' + gens.length + '/' + genLimit();
       TYPES.forEach(function (t) {
         var btn = shopPopup.querySelector('[data-action="buy"][data-id="' + t.id + '"]');
@@ -992,8 +1051,7 @@
       { btn: invBtn, popup: invPopup },
       { btn: shopBtn, popup: shopPopup },
       { btn: upgBtn, popup: upgPopup },
-      { btn: $('rebirthBtn'), popup: rebirthPopup },
-      { btn: $('cashBtn'), popup: $('cashPanelPopup') }
+      { btn: $('rebirthBtn'), popup: rebirthPopup }
     ];
 
     function closePopups() {
@@ -1085,12 +1143,21 @@
     }
 
     function clampPos(x, y) {
-      var HALF = 28;
+      var HALF = 28, s = viewScale;
+      var wx = x / s, wy = y / s;
+      var minY = HALF + 30, maxY = window.innerHeight / s - HALF;
+      if (isMobile()) {
+        // keep gens (and their note bubbles) out from under the stats strip and the button bar
+        minY = $('hud').getBoundingClientRect().bottom / s + HALF + 30;
+        maxY = $('navRow').getBoundingClientRect().top / s - HALF;
+      }
       return {
-        x: Math.min(Math.max(x, HALF), window.innerWidth - HALF),
-        y: Math.min(Math.max(y, HALF + 30), window.innerHeight - HALF)
+        x: Math.min(Math.max(wx, HALF), window.innerWidth / s - HALF),
+        y: Math.min(Math.max(wy, minY), Math.max(minY, maxY))
       };
     }
+    function placeHint() { return isMobile() ? 'Tap to place' : 'Click to place. Press C to stop'; }
+    function hammerHint() { return isMobile() ? 'Tap a gen to hit it' : 'Click a gen to hit it. Press C to stop'; }
 
     function startPlacing(typeId) {
       if (owned[typeId] < 1 || placing || atGenLimit(typeById(typeId))) return;
@@ -1100,13 +1167,13 @@
       closePopups();
       document.body.classList.add('placing');
       hint.hidden = false;
-      $('hintText').textContent = 'Click to place. Press C to stop';
+      $('hintText').textContent = placeHint();
       var t = typeById(typeId);
       ghost = document.createElement('div');
       ghost.className = 'gen ghost';
       ghost.innerHTML = iconHTML(t) + ringHTML(t);
       ghost.style.display = 'none';
-      document.body.appendChild(ghost);
+      field.appendChild(ghost); // same coordinate space as placed gens
     }
 
     function stopPlacing() {
@@ -1124,7 +1191,7 @@
       closePopups();
       document.body.classList.add('hammering');
       $('hammerBtn').setAttribute('aria-pressed', 'true');
-      $('hintText').textContent = 'Click a gen to hit it. Press C to stop';
+      $('hintText').textContent = hammerHint();
       hint.hidden = false;
     }
 
@@ -1164,7 +1231,7 @@
       el.style.top = (y - HALF) + 'px';
       el.innerHTML = iconHTML(t) + noteHTML(t, 0) + ringHTML(t) + starsHTML(t);
       field.appendChild(el);
-      if (t.kind === 'gen') setNoteVal(el.querySelector('.note-val'), t.currency === 'tix' ? fmtNote(t.rate) + ' Tx' : '$' + fmtNote(t.rate * (1 + multi)));
+      if (t.kind === 'gen') setNoteVal(el.querySelector('.note-val'), t.currency === 'tix' ? fmtNote(t.rate) + ' Tx' : '$' + fmtNote(t.rate * (1 + multi * 0.01)));
       if (t.kind === 'block') {
         var b = { typeId: typeId, kind: 'block', el: el, hits: 0, x: x, y: y, radius: t.radius };
         el.addEventListener('click', function () { if (hammer) hitGen(b); });
@@ -1200,41 +1267,6 @@
         render();
       });
       gens.push(o);
-    }
-
-    // Testing: add 1 sextillion cash — hidden in the alpha build, see ALPHA_BUILD above
-    if (ALPHA_BUILD) {
-      $('cashBtn').hidden = true;
-      $('resetBtn').hidden = true;
-      document.querySelectorAll('.dir-arrow').forEach(function (el) { el.hidden = true; });
-    } else {
-      var CASH_GRANTS = [
-        { label: 'Cash', give: function () { money += 1e21; } },
-        { label: 'Tix', give: function () { tix += 1e21; } },
-        { label: 'Pulse Tokens', give: function () { pulseTokens += 1e21; } },
-        { label: 'Notes (fever test)', give: function () { addFeverProgress(FEVER_TARGET); } },
-        { label: 'XP', give: function () { addXp(1e6); } }
-      ];
-      var cashPanelPopup = $('cashPanelPopup');
-      cashPanelPopup.innerHTML =
-        '<div class="item-name">Give test currency</div>' +
-        CASH_GRANTS.map(function (g, i) {
-          return '<button class="buy" data-cash-grant="' + i + '" type="button">' + g.label + '</button>';
-        }).join('');
-      cashPanelPopup.addEventListener('click', function (e) {
-        var btn = e.target.closest('[data-cash-grant]');
-        if (!btn) return;
-        CASH_GRANTS[Number(btn.getAttribute('data-cash-grant'))].give();
-        render();
-      });
-      $('cashBtn').addEventListener('click', function () { toggle($('cashBtn'), cashPanelPopup); });
-      $('resetBtn').addEventListener('click', function () {
-        var btn = $('resetBtn');
-        if (btn.dataset.armed === '1') { location.reload(); return; }
-        btn.dataset.armed = '1';
-        btn.textContent = 'Click again to reset';
-        setTimeout(function () { btn.dataset.armed = '0'; btn.textContent = 'Reset'; }, 3000);
-      });
     }
 
     // Early-alpha notice, shown once per page load, only in the alpha build
