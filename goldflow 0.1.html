@@ -1,0 +1,1564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  html, body { margin: 0; height: 100%; background: #2ecc40; }
+  body.placing { cursor: crosshair; }
+  [hidden] { display: none !important; }
+  .hud {
+    position: fixed; top: calc(16px + env(safe-area-inset-top, 0px)); right: 16px; z-index: 10;
+    display: flex; flex-direction: column; align-items: flex-end;
+    font-family: "Press Start 2P", "Courier New", monospace; color: #1a1a1a;
+  }
+  .row { display: flex; gap: 10px; }
+  .tab {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 16px; border: 0; border-radius: 12px;
+    background: #d6d6d6; color: #1a1a1a;
+    font: 400 16px "Press Start 2P", "Courier New", monospace;
+    cursor: pointer;
+  }
+  .tab:hover { background: #cacaca; }
+  .tab:focus-visible, .buy:focus-visible, .gen:focus-visible { outline: 3px solid #1a1a1a; outline-offset: 2px; }
+  .tab svg { width: 24px; height: 24px; color: #e53935; }
+  .money { margin-top: 10px; font-size: 16px; }
+  .popup {
+    margin-top: 10px;
+    width: min(340px, calc(100vw - 32px)); max-height: min(70vh, 560px); overflow-y: auto;
+    display: none; flex-direction: column; gap: 14px;
+    background: #000; color: #fff; border-radius: 12px;
+    text-align: center; padding: 16px; box-sizing: border-box;
+  }
+  .popup.open { display: flex; }
+  .item {
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    padding: 12px 0; border-bottom: 2px solid #333;
+  }
+  .item:last-child { border-bottom: 0; }
+  .item-name { font-size: 14px; line-height: 1.5; }
+  .item-info { font-size: 10px; line-height: 1.6; }
+  .chance-btn { cursor: pointer; text-decoration: underline dotted; }
+  .display { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .display .item-info { font-size: 12px; }
+  .gen-art {
+    position: relative; width: 64px; height: 64px; margin-top: 22px; border-radius: 8px;
+    background: #7d7d7d; display: flex; align-items: center; justify-content: center;
+    image-rendering: pixelated;
+  }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .buy {
+    padding: 10px 14px; border: 0; border-radius: 8px;
+    background: #f2f2f2; color: #1a1a1a;
+    font: 400 12px "Press Start 2P", "Courier New", monospace;
+    cursor: pointer;
+  }
+  .buy:hover:not(:disabled) { background: #fff; }
+  .buy:disabled { opacity: .5; cursor: not-allowed; }
+  .empty-note { font-size: 12px; }
+  .fever-overlay {
+    position: fixed; inset: 0; z-index: 2; pointer-events: none;
+    opacity: 0; transition: opacity 1s ease;
+    background: linear-gradient(120deg, #ff3b30, #ff9500, #ffe600, #34c759, #00c7e6, #5e5ce6, #ff2d92, #ff3b30);
+    background-size: 300% 300%;
+    mix-blend-mode: soft-light;
+  }
+  .fever-overlay.active {
+    opacity: .4;
+    animation: feverShift 6s linear infinite;
+  }
+  @keyframes feverShift {
+    0%   { background-position: 0% 50%; }
+    100% { background-position: 100% 50%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fever-overlay.active { animation: none; opacity: .22; }
+  }
+  .fever-toast {
+    position: fixed; left: 50%; bottom: calc(64px + env(safe-area-inset-bottom, 0px)); z-index: 15;
+    transform: translateX(-50%); max-width: min(320px, calc(100vw - 32px));
+    background: #000; color: #fff; padding: 10px 16px; border-radius: 8px; box-sizing: border-box;
+    font: 400 10px/1.6 "Press Start 2P", "Courier New", monospace; text-align: center;
+    opacity: 0; visibility: hidden; transition: opacity 1s ease, visibility 0s linear 1s; pointer-events: none;
+  }
+  .fever-toast.show { opacity: 1; visibility: visible; transition: opacity 1s ease, visibility 0s; }
+  .alpha-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,.6);
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px; box-sizing: border-box;
+  }
+  .alpha-overlay[hidden] { display: none; }
+  .alpha-box {
+    width: min(360px, 100%); background: #000; color: #fff; border-radius: 12px;
+    padding: 24px 20px; box-sizing: border-box; text-align: center;
+    display: flex; flex-direction: column; gap: 16px;
+    font-family: "Press Start 2P", "Courier New", monospace;
+  }
+  .alpha-title { font-size: 16px; color: #bfff00; }
+  .alpha-text { font-size: 11px; line-height: 1.7; }
+  .multi { margin-top: 6px; font-size: 12px; color: #fffb00; }
+  .chance-text {
+    position: fixed; z-index: 20; pointer-events: none;
+    color: #fff200; text-shadow: 1px 1px 0 #000;
+    font: 400 10px "Press Start 2P", "Courier New", monospace;
+    transform: translate(-50%, -100%);
+    animation: floatUp .9s ease-out forwards;
+  }
+  .chance-text.win { color: #ffd600; font-size: 12px; }
+  @keyframes floatUp {
+    0%   { opacity: 1; transform: translate(-50%, -100%); }
+    100% { opacity: 0; transform: translate(-50%, calc(-100% - 30px)); }
+  }
+  @media (prefers-reduced-motion: reduce) { .chance-text { animation: none; opacity: 0; } }
+
+  .gen-icon {
+    font: 400 7px "Press Start 2P", "Courier New", monospace;
+    line-height: 1.5;
+    color: #ffffff;
+    text-align: center;
+    text-shadow: 1px 1px 0 #000;
+    padding: 0 4px;
+    pointer-events: none;
+  }
+  .gen-icon.common { color: #ffffff; }
+  .gen .gen-icon { font-size: 6px; }
+  .gen-art:has(.common), .gen:has(.common) { background: #ababab; }
+  .gen-art:has(.uncommon), .gen:has(.uncommon) { background: #8fdc8f; }
+  .gen-art:has(.rare), .gen:has(.rare) { background: #4a90e2; }
+  .gen-art:has(.epic), .gen:has(.epic) { background: #9b59b6; }
+  .gen-art:has(.awful), .gen:has(.awful) {
+    background:
+      repeating-linear-gradient(45deg, rgba(255,255,255,.16) 0 2px, transparent 2px 11px),
+      repeating-linear-gradient(-45deg, rgba(0,0,0,.18) 0 2px, transparent 2px 11px),
+      linear-gradient(#e74c3c, #a93226);
+    box-shadow: inset 0 0 0 3px #7b241c, inset 3px 3px 0 3px rgba(255,255,255,.25);
+  }
+  .gen-art:has(.legendary), .gen:has(.legendary) { background: #f1c40f; }
+  .gen-art:has(.mythic), .gen:has(.mythic) {
+    background: #e0342a;
+    animation: mythicGlow 2.6s ease-in-out infinite;
+  }
+  @keyframes mythicGlow {
+    0%, 100% { box-shadow: 0 0 10px 1px rgba(224, 52, 42, .5), 0 0 18px 4px rgba(224, 52, 42, .25); }
+    50%      { box-shadow: 0 0 16px 3px rgba(224, 52, 42, .7), 0 0 28px 8px rgba(224, 52, 42, .4); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .gen-art:has(.mythic), .gen:has(.mythic) { animation: none; box-shadow: 0 0 14px 2px rgba(224, 52, 42, .55), 0 0 22px 6px rgba(224, 52, 42, .3); }
+  }
+  .gen-art:has(.ethereal), .gen:has(.ethereal) {
+    background: #16161a;
+    animation: etherealGlow 3.2s ease-in-out infinite;
+  }
+  @keyframes etherealGlow {
+    0%   { box-shadow: 0 0 10px 2px rgba(255, 255, 255, .35), 0 0 20px 5px rgba(0, 0, 0, .55); }
+    50%  { box-shadow: 0 0 14px 3px rgba(0, 0, 0, .6), 0 0 26px 8px rgba(255, 255, 255, .3); }
+    100% { box-shadow: 0 0 10px 2px rgba(255, 255, 255, .35), 0 0 20px 5px rgba(0, 0, 0, .55); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .gen-art:has(.ethereal), .gen:has(.ethereal) { animation: none; box-shadow: 0 0 12px 2px rgba(255, 255, 255, .3), 0 0 22px 6px rgba(0, 0, 0, .5); }
+  }
+  .gen-art:has(.ultimate), .gen:has(.ultimate) {
+    animation: ultimateFade 10s ease-in-out infinite, ultimateGlow 10s ease-in-out infinite;
+  }
+  @keyframes ultimateFade {
+    0%   { background: #ff7a00; }
+    50%  { background: #e6391f; }
+    100% { background: #ff7a00; }
+  }
+  @keyframes ultimateGlow {
+    0%   { box-shadow: 0 0 12px 2px rgba(255, 210, 0, .5), 0 0 22px 6px rgba(255, 122, 0, .3); }
+    25%  { box-shadow: 0 0 13px 2px rgba(255, 160, 0, .55), 0 0 24px 7px rgba(255, 90, 0, .35); }
+    50%  { box-shadow: 0 0 14px 3px rgba(255, 60, 0, .6), 0 0 26px 8px rgba(220, 30, 0, .4); }
+    75%  { box-shadow: 0 0 13px 2px rgba(255, 160, 0, .55), 0 0 24px 7px rgba(255, 90, 0, .35); }
+    100% { box-shadow: 0 0 12px 2px rgba(255, 210, 0, .5), 0 0 22px 6px rgba(255, 122, 0, .3); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .gen-art:has(.ultimate), .gen:has(.ultimate) { animation: none; background: #ff7a00; box-shadow: 0 0 14px 3px rgba(255, 150, 0, .5), 0 0 24px 7px rgba(255, 60, 0, .35); }
+  }
+  .gen-art:has(.hyper), .gen:has(.hyper) {
+    background: var(--hyper-bg, #d32f2f);
+    transition: background-color 1.5s ease;
+    animation: hyperGlow 3s ease-in-out infinite;
+  }
+  @keyframes hyperGlow {
+    0%   { box-shadow: 0 0 11px 2px rgba(255, 210, 0, .5), 0 0 20px 5px rgba(211, 47, 47, .35); }
+    50%  { box-shadow: 0 0 15px 3px rgba(211, 47, 47, .6), 0 0 26px 8px rgba(255, 210, 0, .3); }
+    100% { box-shadow: 0 0 11px 2px rgba(255, 210, 0, .5), 0 0 20px 5px rgba(211, 47, 47, .35); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .gen-art:has(.hyper), .gen:has(.hyper) { animation: none; transition: none; background: #d32f2f; box-shadow: 0 0 13px 2px rgba(255, 200, 0, .45), 0 0 22px 6px rgba(211, 47, 47, .35); }
+  }
+  .gen-art:has(.supreme), .gen:has(.supreme) {
+    background: var(--supreme-bg, #123a8c);
+    transition: background-color var(--supreme-bg-duration, 5s) ease, box-shadow var(--supreme-glow-duration, 2s) ease;
+    box-shadow: 0 0 12px 2px var(--supreme-glow, #40c4ff), 0 0 24px 7px var(--supreme-glow, #0d1b4c);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .gen-art:has(.supreme), .gen:has(.supreme) { transition: none; background: #123a8c; box-shadow: 0 0 14px 3px #40c4ff, 0 0 24px 7px #0d1b4c; }
+  }
+  .gen-art:has(.divine), .gen:has(.divine) {
+    background: var(--divine-bg, #ffb7c5);
+    transition: background-color var(--divine-bg-duration, 2.6s) ease;
+    animation: divineGlow 5s ease-in-out infinite;
+  }
+  @keyframes divineGlow {
+    0%, 100% { box-shadow: 0 0 10px 2px rgba(255, 143, 199, .55), 0 0 20px 6px rgba(255, 209, 220, .35); }
+    50%      { box-shadow: 0 0 16px 3px rgba(255, 209, 220, .7), 0 0 28px 8px rgba(255, 111, 165, .4); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .gen-art:has(.divine), .gen:has(.divine) { animation: none; background: #ffb7c5; box-shadow: 0 0 14px 2px rgba(255, 143, 199, .55), 0 0 22px 6px rgba(255, 183, 197, .35); }
+  }
+  .divine-star {
+    position: absolute; width: 6px; height: 6px; pointer-events: none; z-index: 3;
+    background: #ffe4f2;
+    clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+    animation: divineStarTwinkle 2.2s ease-in-out infinite;
+  }
+  @keyframes divineStarTwinkle {
+    0%, 100% { opacity: .2; background: #ffe4f2; transform: scale(.7); }
+    50%      { opacity: 1;  background: #ff6fa5; transform: scale(1.2); }
+  }
+  @media (prefers-reduced-motion: reduce) { .divine-star { animation: none; opacity: .7; } }
+  .gen-art:has(.alpha), .gen:has(.alpha) {
+    background:
+      repeating-linear-gradient(45deg, rgba(255,255,255,.16) 0 2px, transparent 2px 11px),
+      repeating-linear-gradient(-45deg, rgba(0,0,0,.2) 0 2px, transparent 2px 11px),
+      linear-gradient(#ff4d4d, #a30000);
+    box-shadow: inset 0 0 0 3px #7a0c0c, inset 3px 3px 0 3px rgba(255,255,255,.22);
+    animation: alphaGlow 3s ease-in-out infinite;
+  }
+  @keyframes alphaGlow {
+    0%, 100% { box-shadow: inset 0 0 0 3px #7a0c0c, inset 3px 3px 0 3px rgba(255,255,255,.22), 0 0 10px 2px rgba(211, 47, 47, .55); }
+    50%      { box-shadow: inset 0 0 0 3px #7a0c0c, inset 3px 3px 0 3px rgba(255,255,255,.22), 0 0 18px 5px rgba(255, 90, 90, .7); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .gen-art:has(.alpha), .gen:has(.alpha) { animation: none; box-shadow: inset 0 0 0 3px #7a0c0c, inset 3px 3px 0 3px rgba(255,255,255,.22), 0 0 14px 3px rgba(211, 47, 47, .6); }
+  }
+  .alpha-star {
+    position: absolute; width: 6px; height: 6px; pointer-events: none; z-index: 3;
+    background: #ffffff;
+    clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+    animation: alphaStarTwinkle 2s ease-in-out infinite;
+  }
+  @keyframes alphaStarTwinkle {
+    0%, 100% { opacity: .2; background: #ffdada; transform: scale(.7); }
+    50%      { opacity: 1;  background: #ffffff; transform: scale(1.2); }
+  }
+  @media (prefers-reduced-motion: reduce) { .alpha-star { animation: none; opacity: .7; } }
+  .gen-art:has(.magnet), .gen:has(.magnet) { background: transparent; }
+  .gen-art:has(.pulse), .gen:has(.pulse) { background: transparent; }
+  .gen-art:has(.wood), .gen:has(.wood) {
+    background:
+      repeating-linear-gradient(90deg, transparent 0 5px, rgba(110,66,28,.24) 5px 6px, transparent 6px 11px, rgba(110,66,28,.12) 11px 12px, transparent 12px 19px),
+      repeating-linear-gradient(0deg, rgba(255,255,255,.07) 0 2px, transparent 2px 7px),
+      linear-gradient(#dcae78, #c99859);
+    box-shadow: inset 0 0 0 3px #a8743c, inset 3px 3px 0 3px rgba(255,255,255,.22);
+  }
+  .gen-art:has(.stone), .gen:has(.stone) {
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 2px, transparent 2px 16px),
+      repeating-linear-gradient(90deg, rgba(0,0,0,.16) 0 2px, transparent 2px 18px),
+      linear-gradient(#b7b7b7, #8f8f8f);
+    box-shadow: inset 0 0 0 3px #6e6e6e, inset 3px 3px 0 3px rgba(255,255,255,.18);
+  }
+  .gen-icon svg { display: block; }
+  .xp { margin-top: 10px; display: flex; align-items: center; gap: 10px; }
+  .lvl {
+    min-width: 32px; height: 32px; padding: 0 4px; box-sizing: border-box;
+    background: #ffffff; color: #1a1a1a; border: 2px solid #1a1a1a;
+    display: flex; align-items: center; justify-content: center; font-size: 14px;
+  }
+  .xp-col { display: flex; flex-direction: column; gap: 4px; }
+  .rebirth-badge { color: #1a1a1a; font-size: 10px; }
+  .xp-bar { width: 140px; height: 14px; box-sizing: border-box; background: #1a1a1a; border: 2px solid #1a1a1a; }
+  .xp-fill { height: 100%; width: 0; background: #bfff00; transition: width .2s; }
+  .xp-text { font-size: 8px; }
+  @media (prefers-reduced-motion: reduce) { .xp-fill { transition: none; } }
+  .persec { margin-top: 6px; font-size: 10px; }
+  .section-title {
+    text-align: left; font-size: 14px; color: #bfff00;
+    padding-bottom: 8px; border-bottom: 2px solid #bfff00;
+  }
+  .shop-tabs { display: flex; gap: 8px; }
+  .shop-tabs .buy { flex: 1; }
+  .shop-tabs .buy.active { background: #bfff00; color: #1a1a1a; }
+  .pulse-icon { position: relative; width: 54px; height: 54px; perspective: 220px; }
+  .pulse-pad { position: absolute; left: 0; top: 0; }
+  .pulse-cube {
+    position: absolute; left: 50%; top: 36%; width: 26px; height: 26px; margin: -13px 0 0 -13px;
+    background: linear-gradient(135deg, rgba(143,208,236,.6), rgba(216,242,251,.4)),
+      linear-gradient(0deg, transparent 45%, rgba(216,242,251,.6) 50%, transparent 55%),
+      linear-gradient(90deg, transparent 45%, rgba(216,242,251,.6) 50%, transparent 55%);
+    border: 1px solid #d8f2fb; border-radius: 3px;
+    transform-style: preserve-3d;
+    animation: pulseSpin 4.5s ease-in-out infinite;
+  }
+  @keyframes pulseSpin {
+    0%   { transform: translateY(0)    rotate(10deg) rotateY(0deg)   rotateX(-6deg); }
+    25%  { transform: translateY(-2px) rotate(18deg) rotateY(90deg)  rotateX(6deg); }
+    50%  { transform: translateY(0)    rotate(26deg) rotateY(180deg) rotateX(-6deg); }
+    75%  { transform: translateY(-2px) rotate(18deg) rotateY(270deg) rotateX(6deg); }
+    100% { transform: translateY(0)    rotate(10deg) rotateY(360deg) rotateX(-6deg); }
+  }
+  @media (prefers-reduced-motion: reduce) { .pulse-cube { animation: none; transform: rotate(18deg); } }
+  .gen.pulse-holding { box-shadow: 0 0 0 3px rgba(143,208,236,0); transition: box-shadow 3s linear; }
+  .gen.pulse-holding.charging { box-shadow: 0 0 0 3px rgba(143,208,236,.9); }
+  .pulse-wave {
+    position: fixed; z-index: 3; pointer-events: none;
+    left: 0; top: 0; width: 20px; height: 20px; margin-left: -10px; margin-top: -10px;
+    border: 3px solid #8fd0ec; border-radius: 50%;
+    animation: pulseWave .7s ease-out forwards;
+  }
+  @keyframes pulseWave {
+    from { transform: scale(0); opacity: .9; }
+    to   { transform: scale(var(--wave-scale, 8)); opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) { .pulse-wave { animation: none; display: none; } }
+  .boost-bar {
+    position: fixed; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    z-index: 9; pointer-events: none;
+  }
+  .boost-badge {
+    width: 46px; height: 46px; border-radius: 6px; pointer-events: auto;
+    background: #ffffff; border: 1px solid #cfcfcf;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    font: 400 8px "Press Start 2P", "Courier New", monospace; color: #1a1a1a;
+    box-shadow: 0 2px 4px rgba(0,0,0,.35);
+  }
+  .range {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    border: 2px dashed rgba(255,255,255,.7); border-radius: 50%;
+    pointer-events: none; box-sizing: border-box;
+  }
+
+  .tab[aria-pressed="true"] { background: #bfff00; }
+  body.hammering, body.hammering .gen {
+    cursor: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ctext x='2' y='26' font-size='26'%3E%F0%9F%94%A8%3C/text%3E%3C/svg%3E") 16 16, crosshair;
+  }
+  .gen.hit { animation: hit .2s; }
+  @keyframes hit {
+    0%   { transform: translate(0, 0) rotate(0); }
+    25%  { transform: translate(-3px, 0) rotate(-6deg); }
+    50%  { transform: translate(3px, 0) rotate(6deg); }
+    100% { transform: translate(0, 0) rotate(0); }
+  }
+  @media (prefers-reduced-motion: reduce) { .gen.hit { animation: none; } }
+
+  .field { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+  .gen {
+    position: absolute; width: 56px; height: 56px; padding: 0; border: 0; border-radius: 8px;
+    background: #7d7d7d; cursor: pointer; pointer-events: auto;
+    display: flex; align-items: center; justify-content: center;
+    image-rendering: pixelated;
+  }
+  body.placing .gen { pointer-events: none; cursor: crosshair; }
+  .gen.ghost { position: fixed; z-index: 5; opacity: .6; pointer-events: none; }
+  .notes {
+    position: absolute; top: -28px; left: 50%; transform: translateX(-50%); z-index: 2;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    pointer-events: auto; /* clicking the note counts as clicking the gen */
+  }
+  body.placing .notes { pointer-events: none; }
+  .note {
+    min-width: 36px; max-width: 52px; padding: 4px 6px; box-sizing: border-box; white-space: nowrap;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: #bfff00; color: #2f4200; border: 2px solid #4d6b00; border-radius: 4px;
+    font: 400 9px "Press Start 2P", "Courier New", monospace;
+  }
+  .note.tix {
+    background: #d98c1f; color: #fff; border: 3px solid #1a1a1a; border-radius: 3px;
+    box-shadow: inset 0 0 0 2px #f4b942;
+    text-shadow: 1px 1px 0 #000;
+  }
+  .note-count {
+    font: 400 9px "Press Start 2P", "Courier New", monospace; color: #fff; line-height: 1;
+    text-shadow: 1px 1px 0 #000;
+  }
+  .note.pop { animation: pop .25s ease-out; }
+  @keyframes pop { from { transform: scale(1.35); } to { transform: scale(1); } }
+  @media (prefers-reduced-motion: reduce) { .note.pop { animation: none; } }
+
+  .hint {
+    position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 10;
+    transform: translateX(-50%); display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; border-radius: 12px; background: #d6d6d6; color: #1a1a1a;
+    font: 400 10px/1.5 "Press Start 2P", "Courier New", monospace; white-space: nowrap;
+  }
+  @media (max-width: 420px) {
+    .tab { font-size: 12px; padding: 10px 12px; gap: 6px; }
+    .tab svg { width: 20px; height: 20px; }
+    .hint { font-size: 8px; gap: 8px; padding: 8px 10px; }
+  }
+
+  .device-modal {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,.8);
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Press Start 2P", "Courier New", monospace;
+  }
+  .device-modal[hidden] { display: none; }
+  .device-modal-box {
+    background: #000; border: 2px solid #444; border-radius: 12px;
+    padding: 24px; display: flex; flex-direction: column; gap: 18px; align-items: center;
+    max-width: min(320px, calc(100vw - 40px)); box-sizing: border-box;
+  }
+  .device-modal-title { color: #fff; font-size: 13px; text-align: center; line-height: 1.6; }
+  .device-modal-actions { display: flex; gap: 12px; }
+
+  .dir-arrow {
+    position: fixed; z-index: 20; pointer-events: none;
+    width: 36px; height: 36px; border-radius: 8px; background: #d6d6d6; color: #1a1a1a;
+    font-size: 14px; display: flex; align-items: center; justify-content: center;
+  }
+  .dir-up    { top: calc(90px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); }
+  .dir-down  { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); }
+  .dir-left  { left: 16px; top: 50%; transform: translateY(-50%); }
+  .dir-right { right: 16px; top: 50%; transform: translateY(-50%); }
+</style>
+</head>
+<body>
+  <div class="alpha-overlay" id="alphaOverlay">
+    <div class="alpha-box">
+      <div class="alpha-title">Early Alpha</div>
+      <div class="alpha-text">This is an early alpha build for playtesting.<br>Things may be unfinished, unbalanced, or change without notice.</div>
+      <button class="buy" id="alphaDismiss" type="button">Got it</button>
+    </div>
+  </div>
+  <div class="field" id="field" aria-label="Placed generators"></div>
+  <div class="fever-overlay" id="feverOverlay" aria-hidden="true"></div>
+  <div class="fever-toast" id="feverToast">Personal fever mode is active!</div>
+
+  <div class="hud">
+    <div class="row">
+      <button class="tab" id="hammerBtn" type="button" aria-pressed="false" aria-label="Hammer: pick up generators">&#128296;</button>
+      <button class="tab" id="invBtn" type="button" aria-expanded="false" aria-controls="invPopup">Inventory</button>
+      <button class="tab" id="upgBtn" type="button" aria-expanded="false" aria-controls="upgPopup">Upgrades</button>
+      <button class="tab" id="cashBtn" type="button" aria-expanded="false" aria-controls="cashPanelPopup">Cash</button>
+      <button class="tab" id="shopBtn" type="button" aria-expanded="false" aria-controls="shopPopup">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/>
+          <path d="M2 3h3l2.7 12.4a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 7H6"/>
+        </svg>
+        Shop
+      </button>
+      <button class="tab" id="resetBtn" type="button">Reset</button>
+      <button class="tab" id="rebirthBtn" type="button" aria-expanded="false" aria-controls="rebirthPopup">Rebirth</button>
+    </div>
+    <div class="xp" id="xp">
+      <div class="lvl" id="lvl" aria-label="Level"><span class="rebirth-badge" id="rebirthBadge"></span><span id="lvlNum">1</span></div>
+      <div class="xp-col">
+        <div class="xp-bar"><div class="xp-fill" id="xpFill"></div></div>
+        <div class="xp-text" id="xpText">0/10 XP</div>
+      </div>
+    </div>
+    <div class="money" id="money" aria-live="polite">$10</div>
+    <div class="money" id="tixDisplay">0 Tix</div>
+    <div class="persec" id="perSec">$0 per sec</div>
+    <div class="multi" id="multi">Multi x1.00</div>
+    <div class="persec" id="placedCount">Placed 0/10</div>
+
+    <div class="popup" id="shopPopup" role="dialog" aria-label="Shop"></div>
+    <div class="popup" id="invPopup" role="dialog" aria-label="Inventory"></div>
+    <div class="popup" id="upgPopup" role="dialog" aria-label="Upgrades"></div>
+    <div class="popup" id="rebirthPopup" role="dialog" aria-label="Rebirth"></div>
+    <div class="popup" id="cashPanelPopup" role="dialog" aria-label="Give test currency"></div>
+  </div>
+
+  <div class="boost-bar" id="boostBar"></div>
+
+  <div class="hint" id="hint" hidden>
+    <span id="hintText">Click to place. Press C to stop</span>
+    <button class="buy" id="cancelBtn" type="button">Stop (C)</button>
+  </div>
+
+  <div class="device-modal" id="deviceModal" role="dialog" aria-label="Choose your device">
+    <div class="device-modal-box">
+      <div class="device-modal-title">What are you playing on?</div>
+      <div class="device-modal-actions">
+        <button class="buy" id="devicePc" type="button">PC</button>
+        <button class="buy" id="deviceMobile" type="button">Mobile</button>
+      </div>
+    </div>
+  </div>
+
+  <span class="dir-arrow dir-up" aria-hidden="true">&#9650;</span>
+  <span class="dir-arrow dir-down" aria-hidden="true">&#9660;</span>
+  <span class="dir-arrow dir-left" aria-hidden="true">&#9664;</span>
+  <span class="dir-arrow dir-right" aria-hidden="true">&#9654;</span>
+
+  <script>
+    var TYPES = [
+      { id: 'basic',  name: 'Basic Generator',  price: 10,  sell: 7,   rate: 1, xp: 1, hits: 2, ease: 1.21, multiBonus: 0.006, cls: '', kind: 'gen' },
+      { id: 'common', name: 'Common Generator', price: 100, sell: 70, rate: 2, xp: 2, hits: 2, ease: 1.21, multiBonus: 0.003, cls: 'common', kind: 'gen' },
+      { id: 'uncommon', name: 'Uncommon Generator', price: 1000, sell: 700, rate: 4, xp: 5, hits: 3, ease: 1.21, multiBonus: 0.006, cls: 'uncommon', kind: 'gen' },
+      { id: 'rare', name: 'Rare Generator', price: 10000, sell: 7000, rate: 8, xp: 8, hits: 3, ease: 1.4,  multiBonus: 0.009, cls: 'rare', kind: 'gen' },
+      { id: 'epic', name: 'Epic Generator', price: 100000, sell: 70000, rate: 16, xp: 12, hits: 4, ease: 1.6, multiBonus: 0.012, cls: 'epic', kind: 'gen' },
+      { id: 'legendary', name: 'Legendary Generator', price: 1000000, sell: 700000, rate: 32, xp: 18, hits: 5, ease: 1.8, multiBonus: 0.015, cls: 'legendary', kind: 'gen' },
+      { id: 'mythic', name: 'Mythic Generator', price: 10000000, sell: 7000000, rate: 64, xp: 26, hits: 6, ease: 2.0, multiBonus: 0.018, cls: 'mythic', kind: 'gen' },
+      { id: 'ethereal', name: 'Ethereal Generator', price: 100000000, sell: 70000000, rate: 128, xp: 38, hits: 7, ease: 2.2, multiBonus: 0.021, cls: 'ethereal', kind: 'gen' },
+      { id: 'ultimate', name: 'Ultra Generator', price: 1000000000, sell: 700000000, rate: 256, xp: 55, hits: 8, ease: 2.4, multiBonus: 0.024, cls: 'ultimate', kind: 'gen' },
+      { id: 'hyper', name: 'Hyper Generator', price: 9000000000, sell: 6300000000, rate: 512, xp: 80, hits: 9, ease: 2.6, multiBonus: 0.027, cls: 'hyper', kind: 'gen' },
+      { id: 'supreme', name: 'Supreme Generator', price: 90000000000, sell: 63000000000, rate: 1024, xp: 120, hits: 10, ease: 2.8, multiBonus: 0.03, cls: 'supreme', kind: 'gen' },
+      { id: 'divine', name: 'Divine Generator', price: 900000000000, sell: 630000000000, rate: 2048, xp: 180, hits: 11, ease: 3.0, multiBonus: 0.033, cls: 'divine', kind: 'gen' },
+      { id: 'alpha', name: 'Early Alpha Generator', price: 5000, sell: 3500, rate: 50, xp: 10, hits: 3, noMulti: true, hideFromShop: true, cls: 'alpha', kind: 'gen' },
+      { id: 'awful', name: 'Awful Generator', price: 100000, sell: 70000, rate: 1, xp: 8, hits: 3, ease: 1.4, currency: 'tix', unlock: 1, cls: 'awful', kind: 'gen' },
+      { id: 'wood', name: 'Wood Block', price: 15, sell: 14, hits: 1, cls: 'wood', kind: 'block',
+        info: 'Just a wooden<br>block', icon: '<span></span>' },
+      { id: 'stone', name: 'Stone Wall', price: 1000, sell: 800, hits: 2, cls: 'stone', kind: 'block',
+        info: 'Just a stone<br>wall', icon: '<span></span>' },
+      { id: 'magnet', name: 'Magnet', price: 5000, sell: 4000, hits: 1, autoCollect: true, cls: 'magnet', kind: 'block',
+        radius: 112, // 2 blocks (a block is 56px)
+        icon: '<svg viewBox="0 0 32 32" width="54" height="54" aria-hidden="true">' +
+              '<path d="M8 13v4a8 8 0 0 0 16 0v-4" fill="none" stroke="#e53935" stroke-width="6"/>' +
+              '<path d="M8 5v8M24 5v8" fill="none" stroke="#eeeeee" stroke-width="6"/></svg>' },
+      { id: 'pulse', name: 'Pulse', price: 1000000000, priceTix: 1000000, sell: 700000000, sellTix: 700000,
+        hits: 1, cls: 'pulse', kind: 'block',
+        radius: 168, // 3 blocks (a block is 56px)
+        boost: 0.25, boostDuration: 20000, boostCount: 3,
+        info: 'Click it: pulses 3 gens<br>+25% notes for 20s',
+        icon: '<div class="pulse-icon">' +
+                '<svg class="pulse-pad" viewBox="0 0 32 32" width="54" height="54" aria-hidden="true">' +
+                  '<rect x="4" y="21" width="24" height="7" rx="1.5" fill="#0d0d0d" stroke="#e8e8e8" stroke-width="1.2"/>' +
+                '</svg>' +
+                '<div class="pulse-cube"></div>' +
+              '</div>' }
+    ];
+
+    function genLimit() { return 9 + level + rebirthCount * 3; } // +1 slot per level, +3 per rebirth
+    var level = 1, xp = 0, xpNeed = 10; // xpNeed grows 1.3x each level
+    // TEMPORARY for the playtester alpha build — set to false (or delete this block and the
+    // guards below using it) to bring back the Cash and Reset dev tools for normal development
+    var ALPHA_BUILD = false;
+
+    var money = 10;
+    var tix = 0;
+    var pulseTokens = 0; // only earned once rebirthCount >= 4, shown only in the Pulse tree
+    var pulseRangeBought = false;
+    var pulseQuestDone = false; // "Pulse 20 gens at once" — required before the Pulse Range upgrade
+    var pulseQuestBest = 0; // highest number of gens boosted by a single pulse so far
+
+    // Personal Fever: fills as you collect notes, triggers a 2x note-speed
+    // event once it reaches 10,000, then resets and starts filling again
+    var FEVER_TARGET = 10000;
+    var FEVER_DURATION = 100000; // 1min 40s fallback if the fever song isn't loaded
+    var feverProgress = 0;
+    var feverActive = false;
+    var feverUntil = 0;
+    var feverToastTimer = null;
+    var PULSE_RANGE_COST = { tokens: 20, tix: 3000000 };
+    var PULSE_RANGE_BONUS = 28; // +0.5 block (a block is 56px)
+    var noteInterval = 1000; // ms per note
+    var noteSpeedLevel = 0; // 0-5, each level drops noteInterval
+    var NOTE_SPEED = [
+      { cost: 1000,    interval: 950 }, // Lv1
+      { cost: 15000,   interval: 900 }, // Lv2
+      { cost: 150000,  interval: 850 }, // Lv3
+      { cost: 1000000, interval: 800 }, // Lv4
+      { cost: 5000000, interval: 760 }  // Lv5
+    ];
+    var discountLevel = 0; // 0-13, each tier makes every generator 1% cheaper
+    var DISCOUNT_MAX = 13;
+    var DISCOUNT_COST = [];
+    (function () {
+      var cost = 100000;
+      for (var i = 0; i < DISCOUNT_MAX; i++) { DISCOUNT_COST.push(cost); cost *= 5; }
+    })();
+    function genPrice(t) {
+      return Math.max(1, Math.round(t.price * Math.pow(0.99, discountLevel)));
+    }
+    var multi = 0; // +1 each time a multi roll lands; income = rate * (1 + multi)
+    var owned = {}; // id -> count in inventory
+    TYPES.forEach(function (t) { owned[t.id] = 0; });
+    owned['alpha'] = 10; // given out for free, not sold in the shop
+
+    var gens = [], blocks = [], placing = false, placingType = null, ghost = null;
+    var hammer = false, lastHit = 0, HIT_COOLDOWN = 500; // ms between hammer clicks
+    var $ = function (id) { return document.getElementById(id); };
+    var invBtn = $('invBtn'), shopBtn = $('shopBtn'), upgBtn = $('upgBtn');
+    var invPopup = $('invPopup'), shopPopup = $('shopPopup'), upgPopup = $('upgPopup'), rebirthPopup = $('rebirthPopup');
+    var moneyEl = $('money'), perSecEl = $('perSec'), placedEl = $('placedCount');
+    var field = $('field'), hint = $('hint');
+
+    var deviceType = null; // 'pc' or 'mobile'
+    $('devicePc').addEventListener('click', function () {
+      deviceType = 'pc';
+      $('deviceModal').hidden = true;
+    });
+    $('deviceMobile').addEventListener('click', function () {
+      deviceType = 'mobile';
+      $('deviceModal').hidden = true;
+    });
+
+    // Format big numbers: 1e21 -> "1sx"
+    var SUFFIXES = [[1e21,'sx'],[1e18,'qi'],[1e15,'qa'],[1e12,'t'],[1e9,'b'],[1e6,'m']];
+    function fmt(n) {
+      for (var i = 0; i < SUFFIXES.length; i++) {
+        if (n >= SUFFIXES[i][0]) return parseFloat((n / SUFFIXES[i][0]).toFixed(2)) + SUFFIXES[i][1];
+      }
+      return String(Math.floor(n));
+    }
+
+    // Compact k/m/b/q rounding used on the note bubbles above each gen
+    var NOTE_SUFFIXES = [[1e15,'q'],[1e9,'b'],[1e6,'m'],[1e3,'k']];
+    function fmtNote(n) {
+      for (var i = 0; i < NOTE_SUFFIXES.length; i++) {
+        if (n >= NOTE_SUFFIXES[i][0]) return parseFloat((n / NOTE_SUFFIXES[i][0]).toFixed(2)) + NOTE_SUFFIXES[i][1];
+      }
+      return String(Math.floor(n));
+    }
+
+    function typeById(id) {
+      for (var i = 0; i < TYPES.length; i++) if (TYPES[i].id === id) return TYPES[i];
+      return null;
+    }
+
+    function iconHTML(t) {
+      if (t.icon) return '<div class="gen-icon ' + t.cls + '">' + t.icon + '</div>';
+      return '<div class="gen-icon ' + t.cls + '">' + t.name.split(' ').join('<br>') + '</div>';
+    }
+    function infoText(t) {
+      if (t.info) return t.info;
+      if (t.kind === 'block') return 'Collects cash from<br>gens nearby';
+      return t.currency === 'tix' ? t.rate + ' Tix per second' : '$' + t.rate + ' a sec';
+    }
+    function noteHTML(t, n) {
+      if (t.kind !== 'gen') return '';
+      var val = t.currency === 'tix' ? fmtNote(t.rate) + ' Tx' : '$' + fmtNote(t.rate);
+      var cls = t.currency === 'tix' ? ' tix' : '';
+      return '<div class="notes"><span class="note-count">x' + fmtNote(n) + '</span><span class="note' + cls + '"><span class="note-val">' + val + '</span></span></div>';
+    }
+    function ringHTML(t) {
+      return t.radius ? '<span class="range" style="width:' + (t.radius * 2) + 'px;height:' + (t.radius * 2) + 'px"></span>' : '';
+    }
+    function starsHTML(t) {
+      if (t.cls !== 'divine' && t.cls !== 'alpha') return '';
+      var starCls = t.cls === 'alpha' ? 'alpha-star' : 'divine-star';
+      var n = 6 + Math.floor(Math.random() * 5); // 6-10 stars
+      var html = '';
+      for (var i = 0; i < n; i++) {
+        var left = Math.round(-6 + Math.random() * 68) + 'px';
+        var top = Math.round(-6 + Math.random() * 68) + 'px';
+        var delay = (Math.random() * 2.4).toFixed(2) + 's';
+        var dur = (1.8 + Math.random() * 1.2).toFixed(2) + 's';
+        html += '<span class="' + starCls + '" style="left:' + left + ';top:' + top + ';animation-delay:' + delay + ';animation-duration:' + dur + '"></span>';
+      }
+      return html;
+    }
+
+    var shopFilter = 'gen';
+    function buildShop() {
+      shopPopup.innerHTML = '';
+      var tabs = document.createElement('div');
+      tabs.className = 'shop-tabs';
+      tabs.innerHTML =
+        '<button class="buy' + (shopFilter === 'gen' ? ' active' : '') + '" data-shop-filter="gen" type="button">Generators</button>' +
+        '<button class="buy' + (shopFilter === 'block' ? ' active' : '') + '" data-shop-filter="block" type="button">Walls</button>' +
+        (rebirthCount >= 1 ? '<button class="buy' + (shopFilter === 'tix' ? ' active' : '') + '" data-shop-filter="tix" type="button">Tix</button>' : '');
+      shopPopup.appendChild(tabs);
+      TYPES.forEach(function (t) {
+        if (t.hideFromShop) return;
+        var section = t.currency === 'tix' ? 'tix' : t.kind;
+        if (section !== shopFilter) return;
+        var item = document.createElement('div');
+        item.className = 'item';
+        item.innerHTML =
+          '<div class="item-name">' + t.name + '</div>' +
+          '<div class="display">' +
+            '<div class="gen-art">' + iconHTML(t) + noteHTML(t, 1) + starsHTML(t) + '</div>' +
+            '<div class="item-info' + (t.kind === 'gen' ? ' chance-btn' : '') + '" data-id="' + t.id + '" data-action="chance">' + infoText(t) + '</div>' +
+          '</div>' +
+          '<button class="buy" data-id="' + t.id + '" data-action="buy">Buy $' + fmt(genPrice(t)) + (t.priceTix ? ' + ' + fmt(t.priceTix) + ' Tix' : '') + '</button>';
+        shopPopup.appendChild(item);
+      });
+    }
+    shopPopup.addEventListener('click', function (e) {
+      var tabBtn = e.target.closest('[data-shop-filter]');
+      if (!tabBtn) return;
+      shopFilter = tabBtn.getAttribute('data-shop-filter');
+      buildShop();
+      render();
+    });
+
+    function buildInventoryRow(t) {
+      var item = document.createElement('div');
+      item.className = 'item';
+      item.innerHTML =
+        '<div class="item-name">' + t.name + ' x' + owned[t.id] + '</div>' +
+        '<div class="display">' +
+          '<div class="gen-art">' + iconHTML(t) + noteHTML(t, 1) + starsHTML(t) + '</div>' +
+          '<div class="item-info">' + infoText(t) + '</div>' +
+        '</div>' +
+        '<div class="actions">' +
+          '<button class="buy" data-id="' + t.id + '" data-action="place"' + (atGenLimit(t) ? ' disabled' : '') + '>Place</button>' +
+          '<button class="buy" data-id="' + t.id + '" data-action="sell">Sell $' + fmt(t.sell) + (t.sellTix ? ' + ' + fmt(t.sellTix) + ' Tix' : '') + '</button>' +
+        '</div>';
+      return item;
+    }
+
+    function updateXp() {
+      $('lvlNum').textContent = level;
+      $('xpFill').style.width = Math.min(100, xp / xpNeed * 100) + '%';
+      $('xpText').textContent = xp + '/' + xpNeed + ' XP';
+    }
+
+    // Keep the $ tag visually the same size as "$1" even when the number gets long
+    function setNoteVal(el, text) {
+      el.textContent = text;
+      var len = text.length;
+      var size = len <= 4 ? 11 : len === 5 ? 10 : len === 6 ? 9 : len === 7 ? 8 : 7;
+      el.style.fontSize = size + 'px';
+    }
+
+    function addXp(n) {
+      var before = level;
+      xp += Math.ceil(n * (1 + rebirthCount * 0.04));
+      while (xp >= xpNeed) {
+        xp -= xpNeed;
+        level += 1;
+        xpNeed = Math.round(xpNeed * 1.3);
+      }
+      updateXp();
+      if (level !== before) render(); // new slot: refresh Placed x/y and Place buttons
+    }
+
+    // Each gen earns from its own clock: 1 note per second since it was placed (or last collected)
+    function curInterval(o) {
+      var iv = (o.boostUntil && Date.now() < o.boostUntil) ? noteInterval * 0.75 : noteInterval;
+      if (feverActive) iv *= 0.5; // personal fever: notes twice as fast
+      return iv;
+    }
+    function pending(o) { return Math.max(0, Math.floor((Date.now() - o.t0) / curInterval(o))); }
+
+    function updateMulti() {
+      $('multi').textContent = 'Multi x' + (1 + multi).toFixed(2);
+      gens.forEach(function (o) {
+        var t = typeById(o.typeId);
+        setNoteVal(o.val, t.currency === 'tix' ? fmtNote(o.rate) + ' Tx' : '$' + fmtNote(o.rate * (1 + multi)));
+      });
+    }
+
+    // Chance to gain a multi level. Basic starts at 1/100 (M = 1) and D grows toward
+    //   FORMULA(M) = 485.26 * M^1.5067 + 2003.09   (chance = 1 / D)
+    // M = 1 + multi * 0.01, so the chance shifts a little on every single trigger while each
+    // trigger still adds a full +1 to the income multiplier. The start-up offset fades out
+    // as M rises (DECAY = how slowly it fades - raise it to blend in slower).
+    function baseMultiChance() {
+      var M = 1 + multi * 0.01;
+      var DECAY = 10;
+      var full = 485.26 * Math.pow(M, 1.5067) + 2003.09;
+      var start = 485.26 + 2003.09 - 100; // gap between the formula at M=1 and D=100
+      var D = full - start * Math.exp(-(M - 1) / DECAY);
+      return 1 / D;
+    }
+    function fmtChance(p) {
+      if (p <= 0) return '1/∞';
+      if (p >= 1) return '1/1';
+      return '1/' + fmt(1 / p);
+    }
+    function multiChance(t) {
+      var base = baseMultiChance();
+      var tier = (t.ease || 1.21) / 1.21; // every tier's bonus, relative to Basic
+      var eased = base * tier * (1 + rebirthCount * 0.03);
+      return Math.max(0, Math.min(1, eased));
+    }
+
+    function floatText(text, x, y) {
+      var el = document.createElement('div');
+      el.className = 'chance-text win';
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
+      el.textContent = text;
+      document.body.appendChild(el);
+      setTimeout(function () { el.remove(); }, 900);
+    }
+
+    // Only a direct collect (a click, or a hammer pickup) gets a roll -
+    // a magnet auto-collecting in the background doesn't.
+    function rollMulti(t, x, y) {
+      if (Math.random() < multiChance(t)) {
+        multi += 1;
+        updateMulti();
+        floatText('MULTI +1!', x, y - 34);
+      }
+    }
+
+    function showFeverToast(msg) {
+      var el = $('feverToast');
+      el.textContent = msg || 'Personal fever mode is active!';
+      el.classList.add('show');
+      clearTimeout(feverToastTimer);
+      feverToastTimer = setTimeout(function () { el.classList.remove('show'); }, 5000);
+    }
+
+    function startFever() {
+      feverActive = true;
+      // fever lasts as long as the fever song (falls back to 1 minute if it isn't loaded)
+      var songMs = window.gameMusic ? window.gameMusic.feverMs() : 0;
+      feverUntil = Date.now() + (songMs || FEVER_DURATION);
+      $('feverOverlay').classList.add('active');
+      showFeverToast();
+      if (window.gameMusic) window.gameMusic.setFever(true);
+    }
+
+    function endFever() {
+      if (!feverActive) return;
+      feverActive = false;
+      $('feverOverlay').classList.remove('active');
+      showFeverToast('Personal fever mode has ended! Generators are returning to their normal speed.');
+      if (window.gameMusic) window.gameMusic.setFever(false);
+    }
+
+    function addFeverProgress(n) {
+      if (feverActive) return; // don't fill the meter while a fever is already running
+      feverProgress += n;
+      if (feverProgress >= FEVER_TARGET) {
+        feverProgress -= FEVER_TARGET;
+        startFever();
+      }
+    }
+
+    function collect(o, roll) {
+      var interval = curInterval(o);
+      var n = Math.floor((Date.now() - o.t0) / interval);
+      if (n < 1) return 0;
+      o.t0 += n * interval; // keep the leftover fraction of a second
+      var t = typeById(o.typeId);
+      if (t.currency === 'tix') tix += n * o.rate;
+      else money += n * o.rate * (1 + multi) * (1 + rebirthCount * 0.03);
+      addXp(o.xp * n);
+      addFeverProgress(n);
+      if (roll !== false && !t.noMulti) {
+        for (var i = 0; i < n; i++) rollMulti(t, o.x, o.y); // one roll per note generated, not per collect
+      }
+      return n;
+    }
+
+    function pulseWave(x, y, scale) {
+      var el = document.createElement('div');
+      el.className = 'pulse-wave';
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
+      el.style.setProperty('--wave-scale', scale);
+      document.body.appendChild(el);
+      setTimeout(function () { el.remove(); }, 700);
+    }
+
+    function updateBoostBar() {
+      var boostBar = $('boostBar');
+      var now = Date.now();
+      var active = gens.filter(function (o) { return o.boostUntil && o.boostUntil > now; });
+      if (active.length < 1) { boostBar.innerHTML = ''; return; }
+      var secsLeft = Math.ceil(Math.max.apply(null, active.map(function (o) { return o.boostUntil - now; })) / 1000);
+      boostBar.innerHTML = '<div class="boost-badge" title="Pulse boost">' + active.length + 'x&#9889;<br>' + secsLeft + 's</div>';
+    }
+
+    function activatePulse(t, b) {
+      var until = Date.now() + t.boostDuration;
+      pulseWave(b.x, b.y, (t.radius * 2) / 20); // ring grows out to the pulse's range
+      var boosted = gens.filter(function (o) { return inRange(o, b); });
+      boosted.forEach(function (o) {
+        var oldPending = pending(o); // notes already earned, under the current (pre-boost) interval
+        o.boostUntil = until; // interval speeds up from here
+        var newInterval = curInterval(o);
+        // rebase t0 so the pending count stays exactly the same right now — nothing is
+        // collected and nothing extra appears, only the rate going forward changes
+        o.t0 = Date.now() - oldPending * newInterval;
+        pulseWave(o.x, o.y, 2.5); // a small wave around each gen it actually boosted
+      });
+      pulseQuestBest = Math.max(pulseQuestBest, boosted.length);
+      if (pulseQuestBest >= 20) pulseQuestDone = true;
+      if (rebirthCount >= 4) {
+        pulseTokens += 1;
+      }
+      if (upgPopup.classList.contains('open')) buildUpgrades();
+    }
+
+    function atGenLimit(t) { return t.kind === 'gen' && gens.length >= genLimit(); }
+
+    function inRange(o, b) {
+      if (!b.radius) return false;
+      var dx = o.x - b.x, dy = o.y - b.y;
+      return dx * dx + dy * dy <= b.radius * b.radius;
+    }
+
+    function updateMoney() {
+      moneyEl.textContent = '$' + fmt(money);
+      $('tixDisplay').textContent = fmt(tix) + ' Tix';
+      $('tixDisplay').hidden = rebirthCount < 1;
+      var perSec = 0;
+      gens.forEach(function (o) {
+        // only gens being auto-collected by a magnet count as income per sec
+        if (blocks.some(function (b) { return typeById(b.typeId).autoCollect && inRange(o, b); })) perSec += o.rate;
+      });
+      perSecEl.textContent = '$' + fmt(perSec * (1 + multi)) + ' per sec';
+      placedEl.textContent = 'Placed ' + gens.length + '/' + genLimit();
+      TYPES.forEach(function (t) {
+        var btn = shopPopup.querySelector('[data-action="buy"][data-id="' + t.id + '"]');
+        if (btn) btn.disabled = money < genPrice(t) || tix < (t.priceTix || 0);
+      });
+      var nsBtn = $('noteSpeedBuy');
+      if (nsBtn && noteSpeedLevel < NOTE_SPEED.length) nsBtn.disabled = money < NOTE_SPEED[noteSpeedLevel].cost;
+      var rbBtn = $('rebirthBuy');
+      if (rbBtn) rbBtn.disabled = money < rebirthCost();
+      var prBtn = $('pulseRangeBuy');
+      if (prBtn) prBtn.disabled = tix < PULSE_RANGE_COST.tix || pulseTokens < PULSE_RANGE_COST.tokens;
+    }
+
+    var invView = 'items'; // 'items' or 'stats', toggled by the small Stats button in Inventory
+    var statsTab = 'stats'; // 'stats' or 'fevers', sub-tab shown within the Stats view
+    function render() {
+      updateMoney();
+      // inventory list
+      invPopup.innerHTML = '';
+      var toggleBtn = document.createElement('button');
+      toggleBtn.className = 'buy';
+      toggleBtn.type = 'button';
+      toggleBtn.id = 'invStatsToggle';
+      toggleBtn.textContent = invView === 'items' ? 'Stats' : 'Back to Inventory';
+      toggleBtn.addEventListener('click', function () {
+        invView = invView === 'items' ? 'stats' : 'items';
+        render();
+      });
+      invPopup.appendChild(toggleBtn);
+
+      if (invView === 'stats') {
+        var subTabs = document.createElement('div');
+        subTabs.className = 'shop-tabs';
+        subTabs.innerHTML =
+          '<button class="buy' + (statsTab === 'stats' ? ' active' : '') + '" data-stats-tab="stats" type="button">Stats</button>' +
+          '<button class="buy' + (statsTab === 'fevers' ? ' active' : '') + '" data-stats-tab="fevers" type="button">Fevers</button>';
+        invPopup.appendChild(subTabs);
+
+        if (statsTab === 'fevers') {
+          var pct = Math.min(100, Math.floor((feverProgress / FEVER_TARGET) * 100));
+          var secsLeft = feverActive ? Math.ceil((feverUntil - Date.now()) / 1000) : 0;
+          var fever = document.createElement('div');
+          fever.className = 'item';
+          fever.innerHTML =
+            '<div class="item-name">Personal Fever</div>' +
+            '<div class="item-info">Collect notes to fill the meter.<br>' +
+              (feverActive ? 'Active! ' + secsLeft + 's left — notes are 2x faster.' : '2x note speed for 1min and 40s once full.') +
+            '</div>' +
+            '<div class="xp-col" style="align-items:center">' +
+              '<div class="xp-bar"><div class="xp-fill" style="width:' + pct + '%"></div></div>' +
+              '<div class="xp-text">' + fmtNote(feverProgress) + '/' + fmtNote(FEVER_TARGET) + ' Notes (' + pct + '%)</div>' +
+            '</div>';
+          invPopup.appendChild(fever);
+        } else {
+          var bonusPct = (rebirthCount * 3);
+          var stats = document.createElement('div');
+          stats.className = 'item';
+          stats.innerHTML =
+            '<div class="item-name">Boosts</div>' +
+            '<div class="item-info">Rebirth: ' + toRoman(rebirthCount) + '<br>' +
+              'Extra gen slots: +' + (rebirthCount * 3) + ' (from Rebirth)<br>' +
+              'Note income: +' + bonusPct + '% (from Rebirth)<br>' +
+              'Multi chance: +' + bonusPct + '% (from Rebirth)<br>' +
+              'Events: none yet</div>';
+          invPopup.appendChild(stats);
+        }
+
+        var tabBtns = subTabs.querySelectorAll('[data-stats-tab]');
+        for (var i = 0; i < tabBtns.length; i++) {
+          tabBtns[i].addEventListener('click', function (e) {
+            statsTab = e.currentTarget.getAttribute('data-stats-tab');
+            render();
+          });
+        }
+        return;
+      }
+
+      var any = TYPES.some(function (t) { return owned[t.id] > 0; });
+      if (!any) {
+        var empty = document.createElement('div');
+        empty.className = 'item-name empty-note';
+        empty.textContent = 'Empty';
+        invPopup.appendChild(empty);
+      } else {
+        TYPES.forEach(function (t) {
+          if (owned[t.id] > 0) invPopup.appendChild(buildInventoryRow(t));
+        });
+      }
+    }
+
+    var POPUPS = [
+      { btn: invBtn, popup: invPopup },
+      { btn: shopBtn, popup: shopPopup },
+      { btn: upgBtn, popup: upgPopup },
+      { btn: $('rebirthBtn'), popup: rebirthPopup },
+      { btn: $('cashBtn'), popup: $('cashPanelPopup') }
+    ];
+
+    function closePopups() {
+      POPUPS.forEach(function (p) {
+        p.popup.classList.remove('open');
+        p.btn.setAttribute('aria-expanded', 'false');
+      });
+    }
+
+    function toggle(btn, popup) {
+      var wasOpen = popup.classList.contains('open');
+      closePopups();
+      if (!wasOpen) { popup.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); }
+    }
+
+    var upgFilter = 'cash';
+    function buildUpgrades() {
+      upgPopup.innerHTML = '';
+      var tabs = document.createElement('div');
+      tabs.className = 'shop-tabs';
+      tabs.innerHTML =
+        '<button class="buy' + (upgFilter === 'cash' ? ' active' : '') + '" data-upg-filter="cash" type="button">Cash Upgrades</button>' +
+        '<button class="buy' + (upgFilter === 'pulse' ? ' active' : '') + '" data-upg-filter="pulse" type="button">Pulse Upgrades</button>';
+      upgPopup.appendChild(tabs);
+
+      if (upgFilter === 'pulse') {
+        if (rebirthCount < 4) {
+          var locked = document.createElement('div');
+          locked.className = 'item';
+          locked.innerHTML = '<div class="item-name">Pulse Upgrades</div><div class="item-info">Unlocks at Rebirth 4</div>';
+          upgPopup.appendChild(locked);
+          appendQuestSection(upgPopup);
+        } else {
+          appendPulseSection(upgPopup);
+        }
+        return;
+      }
+
+      var item = document.createElement('div');
+      item.className = 'item';
+      var atMax = noteSpeedLevel >= NOTE_SPEED.length;
+      var next = NOTE_SPEED[noteSpeedLevel];
+      var info = atMax
+        ? 'Notes every ' + (noteInterval / 1000).toFixed(2) + 's (max)'
+        : 'Next: notes every<br>' + (next.interval / 1000).toFixed(2) + 's';
+      item.innerHTML =
+        '<div class="item-name">Note Speed Lv' + noteSpeedLevel + '/' + NOTE_SPEED.length + '</div>' +
+        '<div class="item-info">' + info + '</div>' +
+        '<button class="buy" id="noteSpeedBuy" type="button"' + (atMax ? ' disabled' : '') + '>' +
+          (atMax ? 'MAX' : 'Buy $' + fmt(next.cost)) +
+        '</button>';
+      upgPopup.appendChild(item);
+      if (!atMax) {
+        $('noteSpeedBuy').addEventListener('click', function () {
+          if (money < next.cost) return;
+          money -= next.cost;
+          noteSpeedLevel += 1;
+          noteInterval = next.interval;
+          buildUpgrades();
+          render();
+        });
+      }
+
+      var dItem = document.createElement('div');
+      dItem.className = 'item';
+      var dAtMax = discountLevel >= DISCOUNT_MAX;
+      var dCost = DISCOUNT_COST[discountLevel];
+      var dPct = (100 * (1 - Math.pow(0.99, discountLevel))).toFixed(1);
+      var dInfo = dAtMax
+        ? 'Generators ' + dPct + '% cheaper (max)'
+        : 'Generators ' + dPct + '% cheaper<br>Next: -1% more';
+      dItem.innerHTML =
+        '<div class="item-name">Bulk Discount Lv' + discountLevel + '/' + DISCOUNT_MAX + '</div>' +
+        '<div class="item-info">' + dInfo + '</div>' +
+        '<button class="buy" id="discountBuy" type="button"' + (dAtMax ? ' disabled' : '') + '>' +
+          (dAtMax ? 'MAX' : 'Buy $' + fmt(dCost)) +
+        '</button>';
+      upgPopup.appendChild(dItem);
+      if (!dAtMax) {
+        $('discountBuy').addEventListener('click', function () {
+          if (money < dCost) return;
+          money -= dCost;
+          discountLevel += 1;
+          buildShop();
+          buildUpgrades();
+          render();
+        });
+      }
+    }
+
+    function clampPos(x, y) {
+      var HALF = 28;
+      return {
+        x: Math.min(Math.max(x, HALF), window.innerWidth - HALF),
+        y: Math.min(Math.max(y, HALF + 30), window.innerHeight - HALF)
+      };
+    }
+
+    function startPlacing(typeId) {
+      if (owned[typeId] < 1 || placing || atGenLimit(typeById(typeId))) return;
+      exitHammer();
+      placing = true;
+      placingType = typeId;
+      closePopups();
+      document.body.classList.add('placing');
+      hint.hidden = false;
+      $('hintText').textContent = 'Click to place. Press C to stop';
+      var t = typeById(typeId);
+      ghost = document.createElement('div');
+      ghost.className = 'gen ghost';
+      ghost.innerHTML = iconHTML(t) + ringHTML(t);
+      ghost.style.display = 'none';
+      document.body.appendChild(ghost);
+    }
+
+    function stopPlacing() {
+      placing = false;
+      placingType = null;
+      document.body.classList.remove('placing');
+      hint.hidden = true;
+      if (ghost) { ghost.remove(); ghost = null; }
+    }
+
+    function enterHammer() {
+      if (hammer) return;
+      stopPlacing();
+      hammer = true;
+      closePopups();
+      document.body.classList.add('hammering');
+      $('hammerBtn').setAttribute('aria-pressed', 'true');
+      $('hintText').textContent = 'Click a gen to hit it. Press C to stop';
+      hint.hidden = false;
+    }
+
+    function exitHammer() {
+      if (!hammer) return;
+      hammer = false;
+      document.body.classList.remove('hammering');
+      $('hammerBtn').setAttribute('aria-pressed', 'false');
+      hint.hidden = true;
+      gens.forEach(function (o) { o.hits = 0; });
+      blocks.forEach(function (b) { b.hits = 0; });
+    }
+
+    function hitGen(o) {
+      var now = Date.now();
+      if (now - lastHit < HIT_COOLDOWN) return;
+      lastHit = now;
+      o.hits += 1;
+      o.el.classList.remove('hit'); void o.el.offsetWidth; o.el.classList.add('hit');
+      if (o.hits < typeById(o.typeId).hits) return;
+      // enough hits: a gen pays out what it made first, then it goes back into the inventory
+      if (o.kind === 'gen') { collect(o); gens.splice(gens.indexOf(o), 1); }
+      else blocks.splice(blocks.indexOf(o), 1);
+      o.el.remove();
+      owned[o.typeId] += 1;
+      render();
+    }
+
+    function addGen(typeId, x, y) {
+      var HALF = 28;
+      var t = typeById(typeId);
+      var el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'gen';
+      el.setAttribute('aria-label', t.name);
+      el.style.left = (x - HALF) + 'px';
+      el.style.top = (y - HALF) + 'px';
+      el.innerHTML = iconHTML(t) + noteHTML(t, 0) + ringHTML(t) + starsHTML(t);
+      field.appendChild(el);
+      if (t.kind === 'gen') setNoteVal(el.querySelector('.note-val'), t.currency === 'tix' ? fmtNote(t.rate) + ' Tx' : '$' + fmtNote(t.rate * (1 + multi)));
+      if (t.kind === 'block') {
+        var b = { typeId: typeId, kind: 'block', el: el, hits: 0, x: x, y: y, radius: t.radius };
+        el.addEventListener('click', function () { if (hammer) hitGen(b); });
+        if (t.boost) {
+          var holdTimer = null;
+          el.addEventListener('pointerdown', function (e) {
+            if (hammer || placing) return;
+            el.classList.add('pulse-holding');
+            requestAnimationFrame(function () { el.classList.add('charging'); });
+            holdTimer = setTimeout(function () {
+              el.classList.remove('pulse-holding', 'charging');
+              activatePulse(t, b);
+            }, 3000);
+          });
+          ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (evt) {
+            el.addEventListener(evt, function () {
+              clearTimeout(holdTimer);
+              el.classList.remove('pulse-holding', 'charging');
+            });
+          });
+        }
+        blocks.push(b);
+        return;
+      }
+      var o = { typeId: typeId, kind: 'gen', el: el, hits: 0, t0: Date.now(), rate: t.rate, xp: t.xp, n: 0, x: x, y: y, note: el.querySelector('.note'), val: el.querySelector('.note-val'), count: el.querySelector('.note-count') };
+      el.addEventListener('click', function () {
+        if (hammer) { hitGen(o); return; }
+        if (placing) return;
+        if (collect(o) < 1) return;
+        o.n = 0;
+        o.count.textContent = 'x0';
+        o.note.classList.remove('pop'); void o.note.offsetWidth; o.note.classList.add('pop');
+        render();
+      });
+      gens.push(o);
+    }
+
+    // Testing: add 1 sextillion cash — hidden in the alpha build, see ALPHA_BUILD above
+    if (ALPHA_BUILD) {
+      $('cashBtn').hidden = true;
+      $('resetBtn').hidden = true;
+      document.querySelectorAll('.dir-arrow').forEach(function (el) { el.hidden = true; });
+    } else {
+      var CASH_GRANTS = [
+        { label: 'Cash', give: function () { money += 1e21; } },
+        { label: 'Tix', give: function () { tix += 1e21; } },
+        { label: 'Pulse Tokens', give: function () { pulseTokens += 1e21; } },
+        { label: 'Notes (fever test)', give: function () { addFeverProgress(FEVER_TARGET); } },
+        { label: 'XP', give: function () { addXp(1e6); } }
+      ];
+      var cashPanelPopup = $('cashPanelPopup');
+      cashPanelPopup.innerHTML =
+        '<div class="item-name">Give test currency</div>' +
+        CASH_GRANTS.map(function (g, i) {
+          return '<button class="buy" data-cash-grant="' + i + '" type="button">' + g.label + '</button>';
+        }).join('');
+      cashPanelPopup.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-cash-grant]');
+        if (!btn) return;
+        CASH_GRANTS[Number(btn.getAttribute('data-cash-grant'))].give();
+        render();
+      });
+      $('cashBtn').addEventListener('click', function () { toggle($('cashBtn'), cashPanelPopup); });
+      $('resetBtn').addEventListener('click', function () {
+        var btn = $('resetBtn');
+        if (btn.dataset.armed === '1') { location.reload(); return; }
+        btn.dataset.armed = '1';
+        btn.textContent = 'Click again to reset';
+        setTimeout(function () { btn.dataset.armed = '0'; btn.textContent = 'Reset'; }, 3000);
+      });
+    }
+
+    // Early-alpha notice, shown once per page load, only in the alpha build
+    if (!ALPHA_BUILD) $('alphaOverlay').hidden = true;
+    $('alphaDismiss').addEventListener('click', function () { $('alphaOverlay').hidden = true; });
+
+    var rebirthCount = 0;
+    function rebirthCost() { return 1000000 * Math.pow(3, rebirthCount); }
+    function toRoman(num) {
+      var map = [[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],
+                 [10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];
+      var res = '';
+      for (var i = 0; i < map.length; i++) { while (num >= map[i][0]) { res += map[i][1]; num -= map[i][0]; } }
+      return res;
+    }
+    function buildRebirth() {
+      rebirthPopup.innerHTML = '';
+      var cost = rebirthCost();
+      var item = document.createElement('div');
+      item.className = 'item';
+      item.innerHTML =
+        '<div class="item-name">Rebirth' + (rebirthCount > 0 ? ' ' + toRoman(rebirthCount) : '') + '</div>' +
+        '<div class="item-info">Resets your level.<br>Sends placed gens back to your inventory.<br>Next rebirth: ' + toRoman(rebirthCount + 1) +
+          (rebirthCount === 0 ? '<br>Unlocks: boosts, tix' : '') +
+          (rebirthCount === 3 ? '<br>Unlocks: Pulse upgrades (in Upgrades tab)' : '') + '</div>' +
+        '<button class="buy" id="rebirthBuy" type="button"' + (money < cost ? ' disabled' : '') + '>Rebirth $' + fmt(cost) + '</button>';
+      rebirthPopup.appendChild(item);
+      $('rebirthBuy').addEventListener('click', function () {
+        if (money < cost) return;
+        rebirthCount += 1;
+        level = 1; xp = 0; xpNeed = 10;
+        updateXp();
+        // send every placed gen back to the inventory, same as picking each one up by hand
+        gens.slice().forEach(function (o) {
+          collect(o);
+          o.el.remove();
+          owned[o.typeId] += 1;
+        });
+        gens = [];
+        $('rebirthBadge').textContent = toRoman(rebirthCount) + '-';
+        buildRebirth();
+        render();
+      });
+    }
+    function appendQuestSection(container) {
+      var quests = document.createElement('div');
+      quests.className = 'item';
+      quests.innerHTML =
+        '<div class="item-name">Quests</div>' +
+        '<div class="item-info">Pulse 20 gens with a single pulse<br>' +
+          (pulseQuestDone ? 'Complete' : 'Best: ' + pulseQuestBest + '/20') + '</div>';
+      container.appendChild(quests);
+    }
+    function appendPulseSection(container) {
+      var item = document.createElement('div');
+      item.className = 'item';
+      item.innerHTML =
+        '<div class="item-name">Pulse Upgrades</div>' +
+        '<div class="item-info">Tix: ' + fmt(tix) + '<br>Pulse Tokens: ' + fmt(pulseTokens) +
+          '<br>Earn a token each time you pulse.</div>';
+      container.appendChild(item);
+
+      var canAfford = tix >= PULSE_RANGE_COST.tix && pulseTokens >= PULSE_RANGE_COST.tokens;
+      var upg = document.createElement('div');
+      upg.className = 'item';
+      upg.innerHTML =
+        '<div class="item-name">Pulse Range</div>' +
+        '<div class="item-info">+0.5 blocks of pulse range</div>' +
+        (pulseRangeBought
+          ? '<div class="item-info">1/20 upgrades</div>'
+          : !pulseQuestDone
+            ? '<div class="item-info">Locked — complete the quest below</div>'
+            : '<button class="buy" id="pulseRangeBuy" type="button"' + (canAfford ? '' : ' disabled') + '>' +
+                fmt(PULSE_RANGE_COST.tokens) + ' Tokens + ' + fmt(PULSE_RANGE_COST.tix) + ' Tix</button>');
+      container.appendChild(upg);
+
+      if (pulseRangeBought) {
+        var next = document.createElement('div');
+        next.className = 'item';
+        next.innerHTML =
+          '<div class="item-name">Pulse Upgrade 2/20</div>' +
+          '<div class="item-info">No upgrade yet</div>';
+        container.appendChild(next);
+      }
+
+      appendQuestSection(container);
+
+      if (!pulseRangeBought) {
+        var buyBtn = $('pulseRangeBuy');
+        if (buyBtn) buyBtn.addEventListener('click', function () {
+          if (tix < PULSE_RANGE_COST.tix || pulseTokens < PULSE_RANGE_COST.tokens) return;
+          tix -= PULSE_RANGE_COST.tix;
+          pulseTokens -= PULSE_RANGE_COST.tokens;
+          pulseRangeBought = true;
+          var pt = typeById('pulse');
+          pt.radius += PULSE_RANGE_BONUS;
+          blocks.forEach(function (b) {
+            if (b.typeId !== 'pulse') return;
+            b.radius = pt.radius;
+            var ring = b.el.querySelector('.range');
+            if (ring) { ring.style.width = (pt.radius * 2) + 'px'; ring.style.height = (pt.radius * 2) + 'px'; }
+          });
+          buildUpgrades();
+          render();
+        });
+      }
+    }
+    $('rebirthBtn').addEventListener('click', function () { toggle($('rebirthBtn'), rebirthPopup); buildRebirth(); });
+    buildRebirth();
+
+    shopBtn.addEventListener('click', function () { toggle(shopBtn, shopPopup); });
+    invBtn.addEventListener('click', function () { toggle(invBtn, invPopup); });
+    upgBtn.addEventListener('click', function () { toggle(upgBtn, upgPopup); });
+    upgPopup.addEventListener('click', function (e) {
+      var tabBtn = e.target.closest('[data-upg-filter]');
+      if (!tabBtn) return;
+      upgFilter = tabBtn.getAttribute('data-upg-filter');
+      buildUpgrades();
+    });
+
+    function toggleChance(info, t) {
+      var showingChance = info.dataset.mode === 'chance';
+      if (showingChance) {
+        info.dataset.mode = 'rate';
+        info.innerHTML = infoText(t);
+      } else {
+        info.dataset.mode = 'chance';
+        info.innerHTML = fmtChance(multiChance(t)) + ' multi chance';
+      }
+    }
+
+    shopPopup.addEventListener('click', function (e) {
+      var info = e.target.closest('[data-action="chance"]');
+      if (info) { toggleChance(info, typeById(info.getAttribute('data-id'))); return; }
+      var btn = e.target.closest('button[data-action="buy"]');
+      if (!btn) return;
+      var t = typeById(btn.getAttribute('data-id'));
+      if (!t) return;
+      var price = genPrice(t);
+      if (money < price || tix < (t.priceTix || 0)) return;
+      money -= price; tix -= (t.priceTix || 0); owned[t.id] += 1; render();
+    });
+
+    invPopup.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      var id = btn.getAttribute('data-id');
+      var action = btn.getAttribute('data-action');
+      if (action === 'place') startPlacing(id);
+      if (action === 'sell') {
+        var t = typeById(id);
+        if (owned[id] < 1) return;
+        owned[id] -= 1; money += t.sell; tix += (t.sellTix || 0); render();
+      }
+    });
+
+    $('cancelBtn').addEventListener('click', function () { stopPlacing(); exitHammer(); });
+    $('hammerBtn').addEventListener('click', function () { if (hammer) exitHammer(); else enterHammer(); });
+
+    document.addEventListener('pointermove', function (e) {
+      if (!placing || !ghost) return;
+      var p = clampPos(e.clientX, e.clientY);
+      ghost.style.display = 'flex';
+      ghost.style.left = (p.x - 28) + 'px';
+      ghost.style.top = (p.y - 28) + 'px';
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!placing || e.target.closest('.hud, .hint')) return;
+      if (atGenLimit(typeById(placingType))) { stopPlacing(); return; }
+      var p = clampPos(e.clientX, e.clientY);
+      owned[placingType] -= 1;
+      addGen(placingType, p.x, p.y);
+      if (owned[placingType] < 1 || atGenLimit(typeById(placingType))) stopPlacing(); // keep placing until C or out of stock
+      render();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' || e.key === 'c' || e.key === 'C') { stopPlacing(); exitHammer(); }
+    });
+
+    setInterval(function () {
+      gens.forEach(function (o) { o.n = pending(o); });
+      // magnets auto-collect from gens in range, whenever each gen has a note ready
+      blocks.forEach(function (b) {
+        if (!typeById(b.typeId).autoCollect) return;
+        gens.forEach(function (o) {
+          if (o.n > 0 && inRange(o, b)) { collect(o); o.n = pending(o); }
+        });
+      });
+      gens.forEach(function (o) { o.count.textContent = 'x' + fmtNote(o.n); });
+      updateMoney();
+      updateBoostBar();
+      if (feverActive && Date.now() >= feverUntil &&
+          (Date.now() >= feverUntil + 8000 || !(window.gameMusic && window.gameMusic.feverPlaying()))) endFever();
+      if (invView === 'stats' && statsTab === 'fevers') render();
+    }, 100);
+
+    // Every 5s, re-check rebirth-gated unlocks (Tix shop tab, Pulse upgrades) and the
+    // pulse quest, in case a popup is open and needs to reflect a change it missed
+    setInterval(function () {
+      if (shopPopup.classList.contains('open')) buildShop();
+      if (upgPopup.classList.contains('open')) buildUpgrades();
+    }, 5000);
+
+    // Hyper generators: color randomly shifts between shades of red every 5s
+    var HYPER_SHADES = ['#d32f2f', '#7a0c0c', '#ff6b5e'];
+    var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reduceMotion) {
+      setInterval(function () {
+        var shade = HYPER_SHADES[Math.floor(Math.random() * HYPER_SHADES.length)];
+        document.documentElement.style.setProperty('--hyper-bg', shade);
+      }, 5000);
+    }
+
+    // Supreme generators: background blends between dark blue and normal blue every 4-7s,
+    // glow blends between light blue, cyan, and dark blue every 1-3s
+    var SUPREME_BG = ['#0d1b4c', '#1565c0'];
+    var SUPREME_GLOW = ['#80d8ff', '#00e5ff', '#0d1b4c'];
+    function scheduleSupremeBg() {
+      var dur = 4 + Math.random() * 3; // 4-7s
+      document.documentElement.style.setProperty('--supreme-bg-duration', dur + 's');
+      document.documentElement.style.setProperty('--supreme-bg', SUPREME_BG[Math.floor(Math.random() * SUPREME_BG.length)]);
+      setTimeout(scheduleSupremeBg, dur * 1000);
+    }
+    function scheduleSupremeGlow() {
+      var dur = 1 + Math.random() * 2; // 1-3s
+      document.documentElement.style.setProperty('--supreme-glow-duration', dur + 's');
+      document.documentElement.style.setProperty('--supreme-glow', SUPREME_GLOW[Math.floor(Math.random() * SUPREME_GLOW.length)]);
+      setTimeout(scheduleSupremeGlow, dur * 1000);
+    }
+    if (!reduceMotion) { scheduleSupremeBg(); scheduleSupremeGlow(); }
+
+    // Divine generators: background blends randomly between sakura pink, light pink,
+    // and normal pink (slight red) every 2-3.2s
+    var DIVINE_SHADES = ['#ffd1dc', '#ffb7c5', '#ff6fa5'];
+    function scheduleDivineBg() {
+      var dur = 2 + Math.random() * 1.2; // 2-3.2s
+      document.documentElement.style.setProperty('--divine-bg-duration', dur + 's');
+      document.documentElement.style.setProperty('--divine-bg', DIVINE_SHADES[Math.floor(Math.random() * DIVINE_SHADES.length)]);
+      setTimeout(scheduleDivineBg, dur * 1000);
+    }
+    if (!reduceMotion) scheduleDivineBg();
+
+    buildShop();
+    buildUpgrades();
+    render();
+    updateXp();
+    updateMulti();
+
+    // Music: main theme + fever theme (both linked, not embedded). Browsers block
+    // audio until the player interacts, so playback starts on the first click/tap/key.
+    // Tracks crossfade when swapping; the fever lasts exactly as long as its song.
+    (function () {
+      var MAIN_VOL = 0.5, FEVER_VOL = 0.5;
+      var main = new Audio('https://github.com/hippolover0112-commits/Clowning-around/raw/refs/heads/main/Zalza%20-%20Just%20clowning%20around.mp3');
+      var fever = new Audio('https://github.com/hippolover0112-commits/Clowning-around/raw/refs/heads/main/Transformation%E2%98%86Mode!.mp3');
+      main.loop = true;  main.volume = MAIN_VOL;
+      fever.loop = false; fever.volume = FEVER_VOL;
+      fever.preload = 'auto'; // so the song length is known when a fever starts
+      var started = false, inFever = false, outro = false;
+
+      function play(a) { var p = a.play(); if (p && p.catch) p.catch(function () {}); }
+
+      function fadeTo(a, target, ms, then) {
+        if (a._fade) clearInterval(a._fade);
+        var from = a.volume, t0 = Date.now();
+        a._fade = setInterval(function () {
+          var k = Math.min(1, (Date.now() - t0) / ms);
+          a.volume = Math.max(0, Math.min(1, from + (target - from) * k));
+          if (k >= 1) { clearInterval(a._fade); a._fade = null; if (then) then(); }
+        }, 50);
+      }
+
+      function toFever() {
+        outro = false;
+        fever.currentTime = 0;
+        fever.volume = 0;
+        var p = fever.play();
+        function go() { fadeTo(fever, FEVER_VOL, 1000); fadeTo(main, 0, 1000, function () { main.pause(); }); }
+        if (p && p.then) p.then(go).catch(function () {}); else go();
+      }
+
+      function toMain(ms) {
+        if (main.paused) { main.volume = 0; play(main); }
+        fadeTo(main, MAIN_VOL, ms);
+        fadeTo(fever, 0, ms, function () { fever.pause(); });
+      }
+
+      // Start the crossfade back to the main theme during the last seconds of the fever song
+      fever.addEventListener('timeupdate', function () {
+        if (!inFever || outro || !isFinite(fever.duration)) return;
+        var left = fever.duration - fever.currentTime;
+        if (left <= 3) { outro = true; toMain(Math.max(500, left * 1000)); }
+      });
+      fever.addEventListener('ended', function () {
+        if (window.feverActive) endFever();
+      });
+
+      function firstInteraction() {
+        if (started) return;
+        started = true;
+        document.removeEventListener('pointerdown', firstInteraction);
+        document.removeEventListener('keydown', firstInteraction);
+        if (inFever) toFever(); else play(main);
+      }
+      document.addEventListener('pointerdown', firstInteraction);
+      document.addEventListener('keydown', firstInteraction);
+
+      window.gameMusic = {
+        setFever: function (on) {
+          if (inFever === on) return;
+          inFever = on;
+          if (!started) return;
+          if (on) toFever(); else toMain(outro ? 500 : 2000);
+        },
+        feverMs: function () {
+          return started && isFinite(fever.duration) && fever.duration > 0 ? fever.duration * 1000 : 0;
+        },
+        feverPlaying: function () {
+          return started && inFever && !fever.paused && !fever.ended && !fever.error;
+        }
+      };
+    })();
+  </script>
+</body>
+</html>
